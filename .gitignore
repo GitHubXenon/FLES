@@ -1,0 +1,30 @@
+# Android / Gradle
+.gradle/
+**/build/
+local.properties
+
+# Android Studio
+.idea/
+*.iml
+
+# macOS
+.DS_Store
+
+# Signing files
+*.jks
+*.keystore
+key.properties
+
+# Personal data
+*.db
+*.db-wal
+*.db-shm
+*.xlsx
+*.m4a
+*.mp3
+*.wav
+
+# Generated files
+captures/
+.externalNativeBuild/
+.cxx/
