@@ -4,7 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:fitsSystemWindows="true"
-    android:background="#F5F6FA">
+    android:background="@color/fles_bg">
 
     <!-- ============================================================= -->
     <!-- 首页                                                         -->
@@ -30,7 +30,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="FLES"
-                android:textColor="#172033"
+                android:textColor="@color/fles_text_primary"
                 android:textSize="34sp"
                 android:textStyle="bold" />
 
@@ -40,7 +40,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
                 android:text="Foreign Language Example Sentence"
-                android:textColor="#687386"
+                android:textColor="@color/fles_text_secondary"
                 android:textSize="13sp" />
 
             <TextView
@@ -48,10 +48,10 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="20dp"
-                android:background="#E9EDF5"
+                android:background="@color/fles_surface_variant"
                 android:padding="13dp"
                 android:text="母语：中文    学习语言：日语"
-                android:textColor="#263248"
+                android:textColor="@color/fles_text_label"
                 android:textSize="14sp" />
 
             <Button
@@ -59,10 +59,10 @@
                 android:layout_width="match_parent"
                 android:layout_height="58dp"
                 android:layout_marginTop="22dp"
-                android:backgroundTint="#315FCE"
+                android:backgroundTint="@color/fles_primary"
                 android:text="开始学习"
                 android:textAllCaps="false"
-                android:textColor="#FFFFFF"
+                android:textColor="@color/fles_on_primary"
                 android:textSize="18sp"
                 android:textStyle="bold" />
 
@@ -72,7 +72,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="22dp"
                 android:text="学习方向"
-                android:textColor="#263248"
+                android:textColor="@color/fles_text_label"
                 android:textSize="15sp"
                 android:textStyle="bold" />
 
@@ -81,7 +81,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="7dp"
-                android:background="#FFFFFF"
+                android:background="@color/fles_surface"
                 android:orientation="vertical"
                 android:paddingStart="12dp"
                 android:paddingTop="7dp"
@@ -95,7 +95,7 @@
                     android:checked="true"
                     android:minHeight="44dp"
                     android:text="双向混合（随机切换）"
-                    android:textColor="#263248"
+                    android:textColor="@color/fles_text_label"
                     android:textSize="14sp" />
 
                 <RadioButton
@@ -104,7 +104,7 @@
                     android:layout_height="wrap_content"
                     android:minHeight="44dp"
                     android:text="显示外语，回忆母语"
-                    android:textColor="#263248"
+                    android:textColor="@color/fles_text_label"
                     android:textSize="14sp" />
 
                 <RadioButton
@@ -113,7 +113,7 @@
                     android:layout_height="wrap_content"
                     android:minHeight="44dp"
                     android:text="显示母语，回忆外语"
-                    android:textColor="#263248"
+                    android:textColor="@color/fles_text_label"
                     android:textSize="14sp" />
             </RadioGroup>
 
@@ -123,7 +123,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="22dp"
                 android:text="我的句子库"
-                android:textColor="#263248"
+                android:textColor="@color/fles_text_label"
                 android:textSize="15sp"
                 android:textStyle="bold" />
 
@@ -139,10 +139,10 @@
                     android:layout_height="54dp"
                     android:layout_marginEnd="6dp"
                     android:layout_weight="1"
-                    android:backgroundTint="#DCEFE5"
+                    android:backgroundTint="@color/fles_green_fill"
                     android:text="熟练库 (0)"
                     android:textAllCaps="false"
-                    android:textColor="#185C3A"
+                    android:textColor="@color/fles_green_text"
                     android:textSize="14sp" />
 
                 <Button
@@ -151,10 +151,10 @@
                     android:layout_height="54dp"
                     android:layout_marginStart="6dp"
                     android:layout_weight="1"
-                    android:backgroundTint="#E5EAFB"
+                    android:backgroundTint="@color/fles_blue_fill"
                     android:text="收藏库 (0)"
                     android:textAllCaps="false"
-                    android:textColor="#294B9A"
+                    android:textColor="@color/fles_blue_text"
                     android:textSize="14sp" />
             </LinearLayout>
 
@@ -164,14 +164,14 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
                 android:text="当前题库：0 条"
-                android:textColor="#687386"
+                android:textColor="@color/fles_text_secondary"
                 android:textSize="12sp" />
 
             <View
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
                 android:layout_marginTop="22dp"
-                android:background="#DDE2EA" />
+                android:background="@color/fles_divider" />
 
             <TextView
                 android:id="@+id/txtQuestionFileLabel"
@@ -179,7 +179,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="18dp"
                 android:text="题库文件"
-                android:textColor="#263248"
+                android:textColor="@color/fles_text_label"
                 android:textSize="15sp"
                 android:textStyle="bold" />
 
@@ -188,10 +188,10 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="7dp"
-                android:background="#FFFFFF"
+                android:background="@color/fles_surface"
                 android:padding="12dp"
                 android:text="尚未选择题库文件夹"
-                android:textColor="#687386"
+                android:textColor="@color/fles_text_secondary"
                 android:textSize="13sp" />
 
             <Button
@@ -199,10 +199,10 @@
                 android:layout_width="match_parent"
                 android:layout_height="48dp"
                 android:layout_marginTop="8dp"
-                android:backgroundTint="#E3E7EF"
+                android:backgroundTint="@color/fles_btn_neutral"
                 android:text="选择 / 更换题库文件夹"
                 android:textAllCaps="false"
-                android:textColor="#263248"
+                android:textColor="@color/fles_text_label"
                 android:textSize="14sp" />
 
             <Button
@@ -210,10 +210,10 @@
                 android:layout_width="match_parent"
                 android:layout_height="48dp"
                 android:layout_marginTop="8dp"
-                android:backgroundTint="#E3E7EF"
+                android:backgroundTint="@color/fles_btn_neutral"
                 android:text="语言设置"
                 android:textAllCaps="false"
-                android:textColor="#263248"
+                android:textColor="@color/fles_text_label"
                 android:textSize="14sp" />
         </LinearLayout>
     </ScrollView>
@@ -225,6 +225,8 @@
         android:id="@+id/pageStudy"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:clipChildren="false"
+        android:clipToPadding="false"
         android:orientation="vertical"
         android:paddingStart="16dp"
         android:paddingTop="12dp"
@@ -242,11 +244,11 @@
                 android:id="@+id/btnExitStudy"
                 android:layout_width="wrap_content"
                 android:layout_height="42dp"
-                android:backgroundTint="#E3E7EF"
+                android:backgroundTint="@color/fles_btn_neutral"
                 android:minWidth="88dp"
                 android:text="退出学习"
                 android:textAllCaps="false"
-                android:textColor="#263248"
+                android:textColor="@color/fles_text_label"
                 android:textSize="13sp" />
 
             <TextView
@@ -256,7 +258,7 @@
                 android:layout_weight="1"
                 android:gravity="end|center_vertical"
                 android:text="学习中"
-                android:textColor="#687386"
+                android:textColor="@color/fles_text_secondary"
                 android:textSize="14sp" />
         </LinearLayout>
 
@@ -284,7 +286,7 @@
                     android:layout_height="wrap_content"
                     android:gravity="center"
                     android:text="板块：日常生活"
-                    android:textColor="#788397"
+                    android:textColor="@color/fles_text_tertiary"
                     android:textSize="13sp" />
 
                 <TextView
@@ -294,7 +296,7 @@
                     android:layout_marginTop="18dp"
                     android:gravity="center"
                     android:text="请回忆母语意思"
-                    android:textColor="#315FCE"
+                    android:textColor="@color/fles_primary"
                     android:textSize="14sp"
                     android:textStyle="bold" />
 
@@ -303,12 +305,12 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="22dp"
-                    android:background="#FFFFFF"
+                    android:background="@color/fles_surface"
                     android:gravity="center"
                     android:minHeight="150dp"
                     android:padding="22dp"
                     android:text="ご飯を食べてから学校へ行きます。"
-                    android:textColor="#172033"
+                    android:textColor="@color/fles_text_primary"
                     android:textSize="25sp"
                     android:textStyle="bold" />
 
@@ -317,10 +319,10 @@
                     android:layout_width="match_parent"
                     android:layout_height="50dp"
                     android:layout_marginTop="18dp"
-                    android:backgroundTint="#315FCE"
+                    android:backgroundTint="@color/fles_primary"
                     android:text="显示答案"
                     android:textAllCaps="false"
-                    android:textColor="#FFFFFF"
+                    android:textColor="@color/fles_on_primary"
                     android:textSize="15sp" />
 
                 <TextView
@@ -328,10 +330,10 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
-                    android:background="#E9F0FF"
+                    android:background="@color/fles_answer_bg"
                     android:padding="17dp"
                     android:text="吃完饭后去学校。"
-                    android:textColor="#203B78"
+                    android:textColor="@color/fles_answer_text"
                     android:textSize="19sp"
                     android:visibility="gone" />
 
@@ -347,10 +349,10 @@
                         android:layout_height="46dp"
                         android:layout_marginEnd="5dp"
                         android:layout_weight="1"
-                        android:backgroundTint="#E3E7EF"
+                        android:backgroundTint="@color/fles_btn_neutral"
                         android:text="记忆提示"
                         android:textAllCaps="false"
-                        android:textColor="#263248"
+                        android:textColor="@color/fles_text_label"
                         android:textSize="13sp" />
 
                     <Button
@@ -359,10 +361,10 @@
                         android:layout_height="46dp"
                         android:layout_marginStart="5dp"
                         android:layout_weight="1"
-                        android:backgroundTint="#E3E7EF"
+                        android:backgroundTint="@color/fles_btn_neutral"
                         android:text="全句注音"
                         android:textAllCaps="false"
-                        android:textColor="#263248"
+                        android:textColor="@color/fles_text_label"
                         android:textSize="13sp" />
                 </LinearLayout>
 
@@ -371,10 +373,10 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
-                    android:background="#FFF5DD"
+                    android:background="@color/fles_hint_bg"
                     android:padding="14dp"
                     android:text="记忆提示内容"
-                    android:textColor="#684B12"
+                    android:textColor="@color/fles_hint_text"
                     android:textSize="14sp"
                     android:visibility="gone" />
 
@@ -383,10 +385,10 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
-                    android:background="#E5F4ED"
+                    android:background="@color/fles_green_box"
                     android:padding="14dp"
                     android:text="全句注音内容"
-                    android:textColor="#185C3A"
+                    android:textColor="@color/fles_green_text"
                     android:textSize="15sp"
                     android:visibility="gone" />
             </LinearLayout>
@@ -400,54 +402,91 @@
             android:gravity="center"
             android:padding="24dp"
             android:text="目前没有可学习的句子。请返回首页检查题库，或明天继续。"
-            android:textColor="#687386"
+            android:textColor="@color/fles_text_secondary"
             android:textSize="16sp"
             android:visibility="gone" />
 
+        <!-- ===== 学习页底部操作区 ===== -->
+        <!-- 自上而下：辅助按钮（熟悉 / 收藏）→ 主按钮行（录音最大且在最底部 + 下一题）。 -->
+        <!-- clipChildren=false：录音按钮按下时会放大，超出自身边框的部分不能被裁掉。 -->
         <LinearLayout
+            android:id="@+id/layoutStudyActions"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:orientation="horizontal">
+            android:clipChildren="false"
+            android:clipToPadding="false"
+            android:orientation="vertical">
 
-            <Button
-                android:id="@+id/btnMarkMastered"
-                android:layout_width="0dp"
-                android:layout_height="54dp"
-                android:layout_marginEnd="4dp"
-                android:layout_weight="1"
-                android:backgroundTint="#DCEFE5"
-                android:text="熟悉"
-                android:textAllCaps="false"
-                android:textColor="#185C3A"
-                android:textSize="15sp"
-                android:textStyle="bold" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
 
-            <Button
-                android:id="@+id/btnToggleFavorite"
-                android:layout_width="0dp"
-                android:layout_height="54dp"
-                android:layout_marginStart="4dp"
-                android:layout_marginEnd="4dp"
-                android:layout_weight="1"
-                android:backgroundTint="#E5EAFB"
-                android:text="收藏"
-                android:textAllCaps="false"
-                android:textColor="#294B9A"
-                android:textSize="15sp" />
+                <Button
+                    android:id="@+id/btnMarkMastered"
+                    android:layout_width="0dp"
+                    android:layout_height="50dp"
+                    android:layout_marginEnd="4dp"
+                    android:layout_weight="1"
+                    android:backgroundTint="@color/fles_green_fill"
+                    android:text="熟悉"
+                    android:textAllCaps="false"
+                    android:textColor="@color/fles_green_text"
+                    android:textSize="15sp"
+                    android:textStyle="bold" />
 
-            <Button
-                android:id="@+id/btnNextCard"
-                android:layout_width="0dp"
-                android:layout_height="54dp"
-                android:layout_marginStart="4dp"
-                android:layout_weight="1"
-                android:backgroundTint="#315FCE"
-                android:text="下一题"
-                android:textAllCaps="false"
-                android:textColor="#FFFFFF"
-                android:textSize="15sp"
-                android:textStyle="bold" />
+                <Button
+                    android:id="@+id/btnToggleFavorite"
+                    android:layout_width="0dp"
+                    android:layout_height="50dp"
+                    android:layout_marginStart="4dp"
+                    android:layout_weight="1"
+                    android:backgroundTint="@color/fles_blue_fill"
+                    android:text="收藏"
+                    android:textAllCaps="false"
+                    android:textColor="@color/fles_blue_text"
+                    android:textSize="15sp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:clipChildren="false"
+                android:clipToPadding="false"
+                android:gravity="bottom"
+                android:orientation="horizontal"
+                android:paddingBottom="4dp">
+
+                <!-- 录音：整个页面里最大的按钮。背景颜色和圆角在 MainActivity 里按状态切换。 -->
+                <Button
+                    android:id="@+id/btnVoiceRecord"
+                    android:layout_width="0dp"
+                    android:layout_height="108dp"
+                    android:layout_marginStart="4dp"
+                    android:layout_marginEnd="6dp"
+                    android:layout_weight="2"
+                    android:background="@color/fles_voice_idle"
+                    android:text="按住录音，松开停止"
+                    android:textAllCaps="false"
+                    android:textColor="@color/fles_on_voice"
+                    android:textSize="20sp"
+                    android:textStyle="bold" />
+
+                <Button
+                    android:id="@+id/btnNextCard"
+                    android:layout_width="0dp"
+                    android:layout_height="68dp"
+                    android:layout_marginStart="6dp"
+                    android:layout_weight="1"
+                    android:backgroundTint="@color/fles_primary"
+                    android:text="下一题"
+                    android:textAllCaps="false"
+                    android:textColor="@color/fles_on_primary"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
         </LinearLayout>
     </LinearLayout>
 
@@ -475,11 +514,11 @@
                 android:id="@+id/btnLibraryBack"
                 android:layout_width="wrap_content"
                 android:layout_height="42dp"
-                android:backgroundTint="#E3E7EF"
+                android:backgroundTint="@color/fles_btn_neutral"
                 android:minWidth="76dp"
                 android:text="返回"
                 android:textAllCaps="false"
-                android:textColor="#263248"
+                android:textColor="@color/fles_text_label"
                 android:textSize="13sp" />
 
             <TextView
@@ -489,7 +528,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:text="熟练库"
-                android:textColor="#172033"
+                android:textColor="@color/fles_text_primary"
                 android:textSize="18sp"
                 android:textStyle="bold" />
 
@@ -497,11 +536,11 @@
                 android:id="@+id/btnLibraryRefresh"
                 android:layout_width="wrap_content"
                 android:layout_height="42dp"
-                android:backgroundTint="#E3E7EF"
+                android:backgroundTint="@color/fles_btn_neutral"
                 android:minWidth="70dp"
                 android:text="刷新"
                 android:textAllCaps="false"
-                android:textColor="#263248"
+                android:textColor="@color/fles_text_label"
                 android:textSize="13sp" />
         </LinearLayout>
 
@@ -513,7 +552,7 @@
             android:gravity="center"
             android:padding="24dp"
             android:text="这里还没有句子。"
-            android:textColor="#687386"
+            android:textColor="@color/fles_text_secondary"
             android:textSize="15sp"
             android:visibility="gone" />
 
@@ -523,7 +562,7 @@
             android:layout_height="0dp"
             android:layout_weight="1"
             android:clipToPadding="false"
-            android:divider="#DDE2EA"
+            android:divider="@color/fles_divider"
             android:dividerHeight="1dp"
             android:paddingTop="8dp"
             android:paddingBottom="8dp" />

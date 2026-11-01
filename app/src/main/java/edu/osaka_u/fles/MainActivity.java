@@ -1,16 +1,24 @@
 package edu.osaka_u.fles;
 
+import android.Manifest;
+import android.animation.ObjectAnimator;
+import android.animation.PropertyValuesHolder;
+import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
+import android.content.res.Configuration;
+import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
+import android.view.HapticFeedbackConstants;
+import android.view.MotionEvent;
 import android.view.View;
-import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.ListView;
@@ -19,6 +27,7 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.File;
 import java.text.SimpleDateFormat;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -100,6 +109,20 @@ public class MainActivity extends Activity {
     private TextView txtLibraryEmpty;
     private ListView listSentences;
 
+    // 录音（按住录音，松开停止）
+    private Button btnVoiceRecord;
+    private static final int REQUEST_RECORD_AUDIO = 702;
+    /** 短于这个时长的录音当作误触，不保存也不登记。 */
+    private static final long MIN_RECORDING_MS = 300L;
+    private volatile boolean voiceRecordButtonHeld = false;
+    private GradientDrawable voiceButtonBackground;
+    private ValueAnimator voiceRadiusAnimator;
+    private ObjectAnimator voicePulseAnimator;
+
+    // 系统深色 / 浅色模式切换
+    private int lastNightMode;
+    private boolean pendingThemeRecreate;
+
     // 用户设置
     private String nativeLanguageTag;
     private String targetLanguageTag;
@@ -131,6 +154,8 @@ public class MainActivity extends Activity {
     private long workerSessionId = -1L;
     private long workerAttemptId = -1L;
     private String workerCurrentSentenceKey;
+    // 当前正在进行的录音，只允许 ioExecutor 线程访问。
+    private ActiveVoiceRecording activeVoiceRecording;
     private String workerLastSentenceKey;
     private final ArrayList<String> workerNormalBag = new ArrayList<String>();
     private final ArrayList<String> workerFavoriteBag = new ArrayList<String>();
@@ -148,10 +173,23 @@ public class MainActivity extends Activity {
     // Activity 生命周期
     // ------------------------------------------------------------------
 
+    /** 一段正在录的音：记下它属于哪个学习记录、哪个卡片记录。 */
+    private static class ActiveVoiceRecording {
+        VoiceRecorder recorder;
+        long sessionId;
+        long attemptId;
+        int sequenceNo;
+        String sentenceKey;
+        String fileName;
+        String relativePath;
+        long startedAt;
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        lastNightMode = getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK;
 
         database = new FlesDatabase(this);
         dataSync = new FlesDataSync(this, database);
@@ -161,11 +199,33 @@ public class MainActivity extends Activity {
         setupClickListeners();
         loadUserPreferences();
         applyLocalization();
-        ioExecutor.execute(() -> database.closeOpenStudyRecords(System.currentTimeMillis()));
+        ioExecutor.execute(() -> {
+            database.closeOpenStudyRecords(System.currentTimeMillis());
+            // 上次进程被杀时遗留的未完成录音（.wav.part）不是可用录音，直接清理。
+            VoiceRecorder.cleanupPartialFiles(new File(getFilesDir(), "voice_recordings"));
+        });
         refreshHomeCounts();
 
         if (nativeLanguageTag == null || targetLanguageTag == null) {
             showFirstLaunchLanguageDialog();
+        }
+    }
+
+    /**
+     * 系统在深色 / 浅色之间切换时：配色要重新加载，必须重建 Activity。
+     * 但学习状态保存在内存里，学习中直接重建会被踢回首页，所以学习中先记下来，
+     * 等用户退出学习回到首页时再重建。
+     */
+    @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        int nightMode = newConfig.uiMode & Configuration.UI_MODE_NIGHT_MASK;
+        if (nightMode == lastNightMode) return; // 旋转屏幕等其他变化，不需要处理
+        lastNightMode = nightMode;
+        if (pageStudy != null && pageStudy.getVisibility() == View.VISIBLE) {
+            pendingThemeRecreate = true;
+        } else {
+            recreate();
         }
     }
 
@@ -260,6 +320,7 @@ public class MainActivity extends Activity {
         btnMarkMastered = findViewById(R.id.btnMarkMastered);
         btnToggleFavorite = findViewById(R.id.btnToggleFavorite);
         btnNextCard = findViewById(R.id.btnNextCard);
+        btnVoiceRecord = findViewById(R.id.btnVoiceRecord);
 
         btnLibraryBack = findViewById(R.id.btnLibraryBack);
         btnLibraryRefresh = findViewById(R.id.btnLibraryRefresh);
@@ -270,6 +331,8 @@ public class MainActivity extends Activity {
         libraryAdapter = new ArrayAdapter<String>(
                 this, android.R.layout.simple_list_item_1, new ArrayList<String>());
         listSentences.setAdapter(libraryAdapter);
+
+        setupVoiceButtonVisual();
     }
 
     private void setupClickListeners() {
@@ -297,6 +360,7 @@ public class MainActivity extends Activity {
         btnMarkMastered.setOnClickListener(v -> handleMasteryClick());
         btnToggleFavorite.setOnClickListener(v -> handleFavoriteClick());
         btnNextCard.setOnClickListener(v -> handleNextClick());
+        btnVoiceRecord.setOnTouchListener((view, event) -> handleVoiceRecordTouch(view, event));
 
         btnLibraryBack.setOnClickListener(v -> showHomePage());
         btnLibraryRefresh.setOnClickListener(v -> loadLibrary(currentLibraryType));
@@ -476,6 +540,15 @@ public class MainActivity extends Activity {
                 case "toastMastered3": return "3日連続で習得を確認し、習得済みに追加しました。";
                 case "toastMasteredToday": return "今日の習得確認を記録しました。";
                 case "toastMasteredAlready": return "この例文は今日すでに確認済みです。";
+                case "voiceHold": return "長押しして録音";
+                case "voiceRecording": return "録音中・離すと停止";
+                case "toastMicPermission": return "録音するにはマイクの使用を許可してください。許可後、もう一度ボタンを長押ししてください。";
+                case "toastMicGranted": return "マイクが許可されました。もう一度ボタンを長押ししてください。";
+                case "toastMicDenied": return "マイクが許可されていないため、録音できません。";
+                case "toastRecSaved": return "録音を保存しました";
+                case "toastRecTooShort": return "録音が短すぎるため保存しませんでした";
+                case "toastRecFailed": return "録音に失敗しました";
+                case "toastNoCard": return "録音できるカードがありません";
                 default: return key;
             }
         }
@@ -518,6 +591,15 @@ public class MainActivity extends Activity {
                 case "toastMastered3": return "Confirmed 3 days in a row. Added to Mastered.";
                 case "toastMasteredToday": return "Today's mastery confirmation recorded.";
                 case "toastMasteredAlready": return "You already confirmed this sentence today.";
+                case "voiceHold": return "Hold to record";
+                case "voiceRecording": return "Recording… release to stop";
+                case "toastMicPermission": return "Allow microphone access, then hold the button again.";
+                case "toastMicGranted": return "Microphone allowed. Hold the button again to record.";
+                case "toastMicDenied": return "Microphone access was not granted, so recording is unavailable.";
+                case "toastRecSaved": return "Recording saved";
+                case "toastRecTooShort": return "Too short, not saved";
+                case "toastRecFailed": return "Recording failed";
+                case "toastNoCard": return "No card to record for";
                 default: return key;
             }
         }
@@ -559,6 +641,15 @@ public class MainActivity extends Activity {
             case "toastMastered3": return "连续三天确认熟悉，已加入熟练库。";
             case "toastMasteredToday": return "已记录今天的熟悉确认。";
             case "toastMasteredAlready": return "今天已经确认过这句话。";
+            case "voiceHold": return "按住录音，松开停止";
+            case "voiceRecording": return "录音中…松开停止";
+            case "toastMicPermission": return "请允许 FLES 使用麦克风，然后再次按住录音按钮。";
+            case "toastMicGranted": return "麦克风权限已允许，请再次按住录音按钮开始录音。";
+            case "toastMicDenied": return "未获得麦克风权限，无法录音。";
+            case "toastRecSaved": return "录音已保存";
+            case "toastRecTooShort": return "录音太短，未保存";
+            case "toastRecFailed": return "录音失败";
+            case "toastNoCard": return "当前没有可以录音的卡片";
             default: return key;
         }
     }
@@ -583,6 +674,7 @@ public class MainActivity extends Activity {
         btnMarkMastered.setText(getLocalizedText("mastered"));
         btnToggleFavorite.setText(getLocalizedText("favorite"));
         btnNextCard.setText(getLocalizedText("next"));
+        btnVoiceRecord.setText(getLocalizedText("voiceHold"));
         btnLibraryBack.setText(getLocalizedText("back"));
         btnLibraryRefresh.setText(getLocalizedText("refresh"));
         updateLanguagePairText();
@@ -694,6 +786,10 @@ public class MainActivity extends Activity {
         currentSentence = null;
         currentSegmentElapsedReset();
         refreshHomeCounts();
+        if (pendingThemeRecreate) { // 学习期间系统切换了深色模式：现在回到首页，刷新配色
+            pendingThemeRecreate = false;
+            recreate();
+        }
     }
 
     private void currentSegmentElapsedReset() {
@@ -884,6 +980,8 @@ public class MainActivity extends Activity {
                                                               String masteryLocalDate,
                                                               long masteryClickedAt) {
         FlesDatabase.MasteryResult masteryResult = null;
+        // 先结束并保存本卡片的录音，再结束卡片记录，保证录音对应的是正确的卡片记录。
+        stopVoiceRecordingOnWorker("CARD_TRANSITION");
         if (workerAttemptId >= 0 && workerCurrentSentenceKey != null) {
             long now = System.currentTimeMillis();
             String eventType = "NEXT_CLICKED";
@@ -892,7 +990,7 @@ public class MainActivity extends Activity {
             if ("app_background".equals(reason)) eventType = "CARD_EXITED";
             database.insertStudyEvent(workerAttemptId, workerSessionId,
                     workerCurrentSentenceKey, eventType, now, oldDurationMs);
-            database.finishStudyAttempt(workerAttemptId, now, oldDurationMs, reason);
+            database.finishStudyAttemptWithAdditionalDuration(workerAttemptId, now, oldDurationMs, reason);
             workerAttemptId = -1L;
         }
 
@@ -904,10 +1002,7 @@ public class MainActivity extends Activity {
 
         FlesDatabase.Sentence next = drawNextSentenceOnWorker();
         if (next == null) {
-            if (workerSessionId >= 0) {
-                database.finishStudySession(workerSessionId, System.currentTimeMillis(), "no_available_sentences");
-                workerSessionId = -1L;
-            }
+            // 学习记录只在用户点“退出学习”时结束；没有可学句子时也保持它打开。
             workerCurrentSentenceKey = null;
             runOnUiThread(() -> showNoLearningSentences());
             return masteryResult;
@@ -940,6 +1035,9 @@ public class MainActivity extends Activity {
         pronunciationGuideVisible = false;
         currentSentenceFavorited = sentence.isFavorited;
         transitioning = false;
+        // 新卡片：录音按钮一定回到初始外观（上一张卡片的录音已在切换时被结束）。
+        voiceRecordButtonHeld = false;
+        applyVoiceButtonVisual(false);
         if (activityResumed) {
             segmentStartElapsedRealtime = SystemClock.elapsedRealtime();
         } else {
@@ -1087,11 +1185,12 @@ public class MainActivity extends Activity {
         setStudyControlsEnabled(false);
         long duration = currentSegmentDuration();
         ioExecutor.execute(() -> {
+            stopVoiceRecordingOnWorker("SESSION_EXIT");
             if (workerAttemptId >= 0 && workerCurrentSentenceKey != null) {
                 long now = System.currentTimeMillis();
                 database.insertStudyEvent(workerAttemptId, workerSessionId,
                         workerCurrentSentenceKey, "CARD_EXITED", now, duration);
-                database.finishStudyAttempt(workerAttemptId, now, duration, "user_exit");
+                database.finishStudyAttemptWithAdditionalDuration(workerAttemptId, now, duration, "user_exit");
                 workerAttemptId = -1L;
             }
             if (workerSessionId >= 0) {
@@ -1115,6 +1214,8 @@ public class MainActivity extends Activity {
         btnToggleFavorite.setEnabled(enabled);
         btnNextCard.setEnabled(enabled);
         btnExitStudy.setEnabled(enabled);
+        btnVoiceRecord.setEnabled(enabled);
+        btnVoiceRecord.setAlpha(enabled ? 1f : 0.45f);
     }
 
     // ------------------------------------------------------------------
@@ -1131,39 +1232,38 @@ public class MainActivity extends Activity {
         return currentSegmentDuration();
     }
 
+    /**
+     * 切到后台：只把这一段前台时间累加到当前卡片记录上，并停止录音。
+     * 不结束卡片记录，也不结束学习记录——回来后继续同一条。
+     */
     private void pauseCurrentCardSegment(String reason) {
-        if (currentSentence == null || segmentStartElapsedRealtime < 0) return;
-        final long duration = currentSegmentDuration();
+        if (currentSentence == null) return;
+        final long duration = currentSegmentDuration(); // 计时没在走时为 0
         segmentStartElapsedRealtime = -1L;
         segmentNeedsResume = true;
+        voiceRecordButtonHeld = false;
+        applyVoiceButtonVisual(false);
+
         ioExecutor.execute(() -> {
-            if (workerAttemptId >= 0 && workerCurrentSentenceKey != null) {
-                long now = System.currentTimeMillis();
+            stopVoiceRecordingOnWorker("APP_PAUSED");
+            if (workerAttemptId >= 0L && workerCurrentSentenceKey != null) {
+                database.addStudyAttemptDuration(workerAttemptId, duration);
                 database.insertStudyEvent(workerAttemptId, workerSessionId,
-                        workerCurrentSentenceKey, "CARD_EXITED", now, duration);
-                database.finishStudyAttempt(workerAttemptId, now, duration, reason);
-                workerAttemptId = -1L;
-            }
-            if (workerSessionId >= 0) {
-                database.finishStudySession(workerSessionId, System.currentTimeMillis(), reason);
-                workerSessionId = -1L;
+                        workerCurrentSentenceKey, "APP_PAUSED", System.currentTimeMillis(), duration);
             }
         });
     }
 
+    /** 回到前台：继续同一个学习记录、同一条卡片记录，只是重新开始计时。 */
     private void resumeCurrentCardSegment() {
         if (currentSentence == null) return;
         final String key = currentSentence.sentenceKey;
-        final String direction = currentPromptDirection;
+
         ioExecutor.execute(() -> {
-            // 若 Activity 在上一张卡片切换期间进入后台，先关闭可能尚未正确分段的记录。
-            closeWorkerSessionIfOpen("resume_boundary");
-            long now = System.currentTimeMillis();
-            workerSessionId = database.createStudySession(now);
-            workerCurrentSentenceKey = key;
-            workerAttemptId = database.createStudyAttempt(workerSessionId, key, direction, now);
-            database.insertStudyEvent(workerAttemptId, workerSessionId,
-                    key, "CARD_RESUMED", now, 0L);
+            if (workerSessionId >= 0L && workerAttemptId >= 0L && key.equals(workerCurrentSentenceKey)) {
+                database.insertStudyEvent(workerAttemptId, workerSessionId,
+                        key, "APP_RESUMED", System.currentTimeMillis(), 0L);
+            }
             runOnUiThread(() -> {
                 if (pageStudy.getVisibility() == View.VISIBLE && currentSentence != null &&
                         currentSentence.sentenceKey.equals(key)) {
@@ -1174,8 +1274,6 @@ public class MainActivity extends Activity {
                         segmentStartElapsedRealtime = -1L;
                         segmentNeedsResume = true;
                     }
-                    transitioning = false;
-                    setStudyControlsEnabled(true);
                 }
             });
         });
@@ -1194,13 +1292,252 @@ public class MainActivity extends Activity {
     }
 
     // ------------------------------------------------------------------
+    // 录音：按住开始，松开停止
+    //
+    // 线程规则：触摸事件只在主线程更新外观并把任务交给 ioExecutor；
+    // 录音的开始 / 结束和数据库写入全部在 ioExecutor 内串行执行，
+    // 所以它们和 workerSessionId / workerAttemptId 的读写不会互相打架。
+    // ------------------------------------------------------------------
+
+    private float dp(float value) {
+        return value * getResources().getDisplayMetrics().density;
+    }
+
+    private void setupVoiceButtonVisual() {
+        voiceButtonBackground = new GradientDrawable();
+        voiceButtonBackground.setShape(GradientDrawable.RECTANGLE);
+        voiceButtonBackground.setColor(getColor(R.color.fles_voice_idle));
+        voiceButtonBackground.setCornerRadius(dp(24));
+        btnVoiceRecord.setBackground(voiceButtonBackground);
+        btnVoiceRecord.setElevation(dp(4));
+    }
+
+    /**
+     * 录音中：变红、圆角变成胶囊形、按钮放大并轻轻“呼吸”；
+     * 松开：全部恢复原样。
+     */
+    private void applyVoiceButtonVisual(boolean recording) {
+        if (btnVoiceRecord == null || voiceButtonBackground == null) return;
+
+        if (voicePulseAnimator != null) {
+            voicePulseAnimator.cancel();
+            voicePulseAnimator = null;
+        }
+        if (voiceRadiusAnimator != null) voiceRadiusAnimator.cancel();
+        btnVoiceRecord.animate().cancel();
+
+        voiceButtonBackground.setColor(getColor(recording
+                ? R.color.fles_voice_recording : R.color.fles_voice_idle));
+        btnVoiceRecord.setText(getLocalizedText(recording ? "voiceRecording" : "voiceHold"));
+
+        float height = Math.max(btnVoiceRecord.getHeight(), dp(108));
+        float fromRadius = voiceButtonBackground.getCornerRadius();
+        float toRadius = recording ? height / 2f : dp(24);
+        voiceRadiusAnimator = ValueAnimator.ofFloat(fromRadius, toRadius);
+        voiceRadiusAnimator.setDuration(160L);
+        voiceRadiusAnimator.addUpdateListener(animation ->
+                voiceButtonBackground.setCornerRadius((Float) animation.getAnimatedValue()));
+        voiceRadiusAnimator.start();
+
+        if (recording) {
+            voicePulseAnimator = ObjectAnimator.ofPropertyValuesHolder(btnVoiceRecord,
+                    PropertyValuesHolder.ofFloat(View.SCALE_X, 1.06f, 1.14f),
+                    PropertyValuesHolder.ofFloat(View.SCALE_Y, 1.06f, 1.14f));
+            voicePulseAnimator.setDuration(520L);
+            voicePulseAnimator.setRepeatMode(ValueAnimator.REVERSE);
+            voicePulseAnimator.setRepeatCount(ValueAnimator.INFINITE);
+            voicePulseAnimator.start();
+        } else {
+            btnVoiceRecord.animate().scaleX(1f).scaleY(1f).setDuration(140L).start();
+        }
+    }
+
+    private boolean handleVoiceRecordTouch(View view, MotionEvent event) {
+        switch (event.getActionMasked()) {
+            case MotionEvent.ACTION_DOWN:
+                if (view.getParent() != null) view.getParent().requestDisallowInterceptTouchEvent(true);
+                if (currentSentence == null || transitioning) return true;
+
+                if (checkSelfPermission(Manifest.permission.RECORD_AUDIO)
+                        != PackageManager.PERMISSION_GRANTED) {
+                    // 第一次授权后需要再按一次：避免权限弹窗返回时意外开始录音。
+                    requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO},
+                            REQUEST_RECORD_AUDIO);
+                    showToastMessage(getLocalizedText("toastMicPermission"));
+                    return true;
+                }
+
+                voiceRecordButtonHeld = true;
+                applyVoiceButtonVisual(true);
+                view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+                ioExecutor.execute(this::startVoiceRecordingOnWorker);
+                return true;
+
+            case MotionEvent.ACTION_UP:
+            case MotionEvent.ACTION_CANCEL:
+                if (!voiceRecordButtonHeld) return true; // 这次按下并没有开始录音
+                voiceRecordButtonHeld = false;
+                applyVoiceButtonVisual(false);
+                ioExecutor.execute(() -> stopVoiceRecordingOnWorker("USER_RELEASE"));
+                return true;
+
+            default:
+                return true;
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQUEST_RECORD_AUDIO) {
+            boolean granted = grantResults.length > 0
+                    && grantResults[0] == PackageManager.PERMISSION_GRANTED;
+            showToastMessage(getLocalizedText(granted ? "toastMicGranted" : "toastMicDenied"));
+        }
+    }
+
+    /**
+     * 录音文件名：FLES_S{学习记录ID}_A{卡片记录ID}_R{该卡片第几段}_{开始时间}.wav
+     * 例：FLES_S000012_A00000345_R01_20261031-143005.wav
+     * 其中 A 后面的数字就是 study_attempts.id，所以文件名本身就能定位到唯一一条卡片记录；
+     * R 区分同一张卡片上按了多次录音。
+     */
+    private static String buildRecordingFileName(long sessionId, long attemptId,
+                                                 int sequenceNo, long startedAt) {
+        String stamp = new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(new Date(startedAt));
+        return String.format(Locale.US, "FLES_S%06d_A%08d_R%02d_%s.wav",
+                sessionId, attemptId, sequenceNo, stamp);
+    }
+
+    private void resetVoiceButtonOnUi(final boolean force) {
+        runOnUiThread(() -> {
+            if (force) voiceRecordButtonHeld = false;
+            if (!voiceRecordButtonHeld) applyVoiceButtonVisual(false);
+        });
+    }
+
+    /** 只能在 ioExecutor 上调用。 */
+    private void startVoiceRecordingOnWorker() {
+        if (!voiceRecordButtonHeld) return;      // 手指已经松开：不创建录音
+        if (activeVoiceRecording != null) return;
+
+        if (workerSessionId < 0L || workerAttemptId < 0L || workerCurrentSentenceKey == null) {
+            runOnUiThread(() -> {
+                voiceRecordButtonHeld = false;
+                applyVoiceButtonVisual(false);
+                showToastMessage(getLocalizedText("toastNoCard"));
+            });
+            return;
+        }
+
+        final long sessionId = workerSessionId;
+        final long attemptId = workerAttemptId;
+        final String sentenceKey = workerCurrentSentenceKey;
+        final long startedAt = System.currentTimeMillis();
+
+        final File directory = new File(getFilesDir(), "voice_recordings");
+        int sequenceNo = database.nextVoiceSequence(attemptId);
+        String fileName = buildRecordingFileName(sessionId, attemptId, sequenceNo, startedAt);
+        while (new File(directory, fileName).exists()) { // 极端情况：文件在但数据库没有这一行
+            sequenceNo++;
+            fileName = buildRecordingFileName(sessionId, attemptId, sequenceNo, startedAt);
+        }
+
+        final VoiceRecorder recorder = new VoiceRecorder(new File(directory, fileName), startedAt);
+        try {
+            recorder.start(getApplicationContext());
+
+            ActiveVoiceRecording active = new ActiveVoiceRecording();
+            active.recorder = recorder;
+            active.sessionId = sessionId;
+            active.attemptId = attemptId;
+            active.sequenceNo = sequenceNo;
+            active.sentenceKey = sentenceKey;
+            active.fileName = fileName;
+            active.relativePath = "voice_recordings/" + fileName;
+            active.startedAt = startedAt;
+            activeVoiceRecording = active;
+
+            database.insertStudyEvent(attemptId, sessionId, sentenceKey,
+                    "VOICE_RECORDING_STARTED", startedAt, 0L);
+        } catch (Exception e) {
+            activeVoiceRecording = null;
+            database.insertStudyEvent(attemptId, sessionId, sentenceKey,
+                    "VOICE_RECORDING_FAILED", System.currentTimeMillis(), 0L);
+            final String detail = e.getMessage();
+            runOnUiThread(() -> {
+                voiceRecordButtonHeld = false;
+                applyVoiceButtonVisual(false);
+                showToastMessage(getLocalizedText("toastRecFailed") + (detail == null ? "" : "：" + detail));
+            });
+        }
+    }
+
+    /**
+     * 只能在 ioExecutor 上调用：结束录音、等 WAV 封装完成，再登记到数据库。
+     * 没有正在进行的录音时什么也不做，所以在各个“结束点”都可以放心调用。
+     */
+    private void stopVoiceRecordingOnWorker(String stopReason) {
+        final ActiveVoiceRecording active = activeVoiceRecording;
+        if (active == null) return;
+        activeVoiceRecording = null;
+
+        final boolean forceReset = !"USER_RELEASE".equals(stopReason);
+        File savedFile = null;
+        try {
+            active.recorder.requestStop();
+            VoiceRecorder.Result result = active.recorder.awaitResult();
+            savedFile = result.file;
+
+            if (result.durationMs < MIN_RECORDING_MS) {
+                result.file.delete();
+                database.insertStudyEvent(active.attemptId, active.sessionId, active.sentenceKey,
+                        "VOICE_RECORDING_TOO_SHORT", result.endedAt, result.durationMs);
+                runOnUiThread(() -> showToastMessage(getLocalizedText("toastRecTooShort")));
+                return;
+            }
+
+            database.insertVoiceRecording(
+                    active.sessionId, active.attemptId, active.sequenceNo, active.sentenceKey,
+                    active.fileName, active.relativePath,
+                    result.startedAt, result.endedAt, result.durationMs,
+                    result.sampleRate, result.channels, result.bitsPerSample,
+                    result.fileSizeBytes, stopReason);
+            database.insertStudyEvent(active.attemptId, active.sessionId, active.sentenceKey,
+                    "VOICE_RECORDING_SAVED", result.endedAt, result.durationMs);
+
+            final String seconds = String.format(Locale.US, "%.1f s", result.durationMs / 1000f);
+            runOnUiThread(() -> showToastMessage(getLocalizedText("toastRecSaved") + " (" + seconds + ")"));
+
+        } catch (VoiceRecorder.EmptyRecordingException e) {
+            // 按下后立刻松开：不是故障，当作太短。
+            database.insertStudyEvent(active.attemptId, active.sessionId, active.sentenceKey,
+                    "VOICE_RECORDING_TOO_SHORT", System.currentTimeMillis(), 0L);
+            runOnUiThread(() -> showToastMessage(getLocalizedText("toastRecTooShort")));
+        } catch (Exception e) {
+            // 失败时不留下没有登记的文件：保证“文件”和“数据库行”一一对应。
+            File file = savedFile != null ? savedFile : active.recorder.getOutputFile();
+            if (file != null && file.exists()) file.delete();
+            database.insertStudyEvent(active.attemptId, active.sessionId, active.sentenceKey,
+                    "VOICE_RECORDING_FAILED", System.currentTimeMillis(), 0L);
+            final String detail = e.getMessage();
+            runOnUiThread(() -> showToastMessage(getLocalizedText("toastRecFailed")
+                    + (detail == null ? "" : "：" + detail)));
+            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+        } finally {
+            resetVoiceButtonOnUi(forceReset);
+        }
+    }
+
+    // ------------------------------------------------------------------
     // worker 辅助函数
     // ------------------------------------------------------------------
 
     private void closeWorkerSessionIfOpen(String reason) {
+        stopVoiceRecordingOnWorker("SESSION_CLOSED");
         if (workerAttemptId >= 0 && workerCurrentSentenceKey != null) {
             long now = System.currentTimeMillis();
-            database.finishStudyAttempt(workerAttemptId, now, 0L, reason);
+            database.finishStudyAttemptWithAdditionalDuration(workerAttemptId, now, 0L, reason);
             workerAttemptId = -1L;
         }
         if (workerSessionId >= 0) {
@@ -1216,6 +1553,8 @@ public class MainActivity extends Activity {
         transitioning = false;
         scrollStudyContent.setVisibility(View.GONE);
         txtNoLearningSentences.setVisibility(View.VISIBLE);
+        voiceRecordButtonHeld = false;
+        applyVoiceButtonVisual(false);
         setStudyControlsEnabled(false);
         // 即使没有可学句子，也必须允许用户退出学习页。
         btnExitStudy.setEnabled(true);

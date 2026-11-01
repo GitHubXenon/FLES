@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- FLES 深色配色（系统深色模式时自动使用，只覆盖同名颜色） -->
+    <color name="fles_bg">#0F1115</color>   <!-- 页面背景 -->
+    <color name="fles_surface">#1A1D24</color>   <!-- 卡片 / 输入框表面 -->
+    <color name="fles_surface_variant">#242933</color>   <!-- 次级表面 -->
+    <color name="fles_divider">#323846</color>   <!-- 分隔线 -->
+    <color name="fles_text_primary">#EEF0F6</color>   <!-- 主要文字 -->
+    <color name="fles_text_label">#D3D8E4</color>   <!-- 标签 / 按钮文字 -->
+    <color name="fles_text_secondary">#A7AEBD</color>   <!-- 次要文字 -->
+    <color name="fles_text_tertiary">#8F97A8</color>   <!-- 三级文字 -->
+    <color name="fles_btn_neutral">#2B3140</color>   <!-- 中性按钮填充 -->
+    <color name="fles_primary">#8FB2FF</color>   <!-- 主色（按钮填充 + 强调文字） -->
+    <color name="fles_on_primary">#0A1A3D</color>   <!-- 主色按钮上的文字 -->
+    <color name="fles_green_fill">#1E3D2D</color>   <!-- “熟悉”按钮填充 -->
+    <color name="fles_green_text">#8EDDAF</color>   <!-- 绿色文字 -->
+    <color name="fles_green_box">#1A3629</color>   <!-- 全句注音框背景 -->
+    <color name="fles_blue_fill">#27304F</color>   <!-- “收藏”按钮填充 -->
+    <color name="fles_blue_text">#AEC2FF</color>   <!-- 蓝色文字 -->
+    <color name="fles_answer_bg">#1D2A4B</color>   <!-- 答案框背景 -->
+    <color name="fles_answer_text">#C8D7FF</color>   <!-- 答案框文字 -->
+    <color name="fles_hint_bg">#3A311E</color>   <!-- 记忆提示框背景 -->
+    <color name="fles_hint_text">#F0D49C</color>   <!-- 记忆提示框文字 -->
+    <color name="fles_voice_idle">#277A58</color>   <!-- 录音按钮（待机） -->
+    <color name="fles_voice_recording">#D2373C</color>   <!-- 录音按钮（录音中） -->
+    <color name="fles_on_voice">#FFFFFF</color>   <!-- 录音按钮上的文字 -->
+</resources>

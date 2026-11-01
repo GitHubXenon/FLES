@@ -1,5 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- 学习页“按住录音”需要麦克风。录音保存在 APP 私有目录，不需要任何存储权限。 -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- 没有麦克风的设备也允许安装（只是不能录音）。 -->
+    <uses-feature
+        android:name="android.hardware.microphone"
+        android:required="false" />
+
     <application
         android:allowBackup="true"
         android:label="FLES"
@@ -7,7 +15,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:enableOnBackInvokedCallback="false"
-        android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        android:theme="@style/Theme.FLES">
         <activity
             android:name=".MainActivity"
             android:exported="true"

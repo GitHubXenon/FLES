@@ -1,16 +1,12 @@
-<resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Base application theme. -->
-    <style name="Theme.FLES" parent="Theme.MaterialComponents.DayNight.DarkActionBar">
-        <!-- Primary brand color. -->
-        <item name="colorPrimary">@color/purple_200</item>
-        <item name="colorPrimaryVariant">@color/purple_700</item>
-        <item name="colorOnPrimary">@color/black</item>
-        <!-- Secondary brand color. -->
-        <item name="colorSecondary">@color/teal_200</item>
-        <item name="colorSecondaryVariant">@color/teal_200</item>
-        <item name="colorOnSecondary">@color/black</item>
-        <!-- Status bar color. -->
-        <item name="android:statusBarColor">?attr/colorPrimaryVariant</item>
-        <!-- Customize your theme here. -->
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        深色主题：父主题换成系统的深色 Material 主题，
+        这样 AlertDialog、列表文字、单选按钮、Toast 等系统控件会自动变成深色。
+    -->
+    <style name="Theme.FLES" parent="android:Theme.Material.NoActionBar">
+        <item name="android:colorAccent">@color/fles_primary</item>
+        <item name="android:windowBackground">@color/fles_bg</item>
+        <item name="android:forceDarkAllowed">false</item>
     </style>
 </resources>

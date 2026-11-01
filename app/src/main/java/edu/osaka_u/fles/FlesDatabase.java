@@ -20,7 +20,7 @@ import java.util.Set;
 public class FlesDatabase extends SQLiteOpenHelper {
 
     private static final String DB_NAME = "fles.db";
-    private static final int DB_VERSION = 1;
+    private static final int DB_VERSION = 2;
 
     public FlesDatabase(Context context) {
         super(context.getApplicationContext(), DB_NAME, null, DB_VERSION);
@@ -50,6 +50,25 @@ public class FlesDatabase extends SQLiteOpenHelper {
         public boolean isPermanentlyMastered;
         public boolean alreadyClickedToday;
         public boolean becamePermanentNow;
+    }
+
+    /** 一段录音：通过 attemptId 对应唯一一条卡片记录（study_attempts.id）。 */
+    public static class VoiceRecording {
+        public long id;
+        public long sessionId;      // 学习记录 ID（study_sessions.id）
+        public long attemptId;      // 卡片记录 ID（study_attempts.id）
+        public int sequenceNo;      // 这是该卡片记录里的第几段录音，从 1 开始
+        public String sentenceKey = "";
+        public String fileName = "";
+        public String relativePath = "";
+        public long startedAt;
+        public long endedAt;
+        public long durationMs;
+        public int sampleRate;
+        public int channels;
+        public int bitsPerSample;
+        public long fileSizeBytes;
+        public String stopReason = "";
     }
 
     public static class HomeCounts {
@@ -126,6 +145,12 @@ public class FlesDatabase extends SQLiteOpenHelper {
                 "ended_at INTEGER," +
                 "duration_ms INTEGER NOT NULL DEFAULT 0," +
                 "end_reason TEXT NOT NULL DEFAULT ''," +
+                "answer_revealed INTEGER NOT NULL DEFAULT 0," +
+                "memory_hint_revealed INTEGER NOT NULL DEFAULT 0," +
+                "pronunciation_guide_revealed INTEGER NOT NULL DEFAULT 0," +
+                "favorite_toggled INTEGER NOT NULL DEFAULT 0," +
+                "mastery_clicked INTEGER NOT NULL DEFAULT 0," +
+                "recording_count INTEGER NOT NULL DEFAULT 0," +
                 "FOREIGN KEY(session_id) REFERENCES study_sessions(id)," +
                 "FOREIGN KEY(sentence_key) REFERENCES sentences(sentence_key)" +
                 ")");
@@ -149,12 +174,51 @@ public class FlesDatabase extends SQLiteOpenHelper {
         db.execSQL("CREATE INDEX idx_events_sentence ON study_events(sentence_key)");
         db.execSQL("CREATE INDEX idx_events_attempt ON study_events(attempt_id)");
         db.execSQL("CREATE INDEX idx_mastery_permanent ON mastery_state(is_permanently_mastered)");
+
+        createVoiceRecordingsTable(db);
+    }
+
+    /** 录音表。onCreate（全新安装）和 onUpgrade（1 -> 2）共用，保证两条路径得到相同结构。 */
+    private void createVoiceRecordingsTable(SQLiteDatabase db) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS voice_recordings (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                "session_id INTEGER NOT NULL," +
+                "attempt_id INTEGER NOT NULL," +
+                "sequence_no INTEGER NOT NULL," +
+                "sentence_key TEXT NOT NULL," +
+                "file_name TEXT NOT NULL UNIQUE," +
+                "relative_path TEXT NOT NULL," +
+                "started_at INTEGER NOT NULL," +
+                "ended_at INTEGER NOT NULL," +
+                "duration_ms INTEGER NOT NULL DEFAULT 0," +
+                "sample_rate INTEGER NOT NULL," +
+                "channels INTEGER NOT NULL," +
+                "bits_per_sample INTEGER NOT NULL," +
+                "file_size_bytes INTEGER NOT NULL DEFAULT 0," +
+                "stop_reason TEXT NOT NULL DEFAULT ''," +
+                "UNIQUE(attempt_id, sequence_no)," +
+                "FOREIGN KEY(session_id) REFERENCES study_sessions(id)," +
+                "FOREIGN KEY(attempt_id) REFERENCES study_attempts(id)," +
+                "FOREIGN KEY(sentence_key) REFERENCES sentences(sentence_key)" +
+                ")");
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_voice_attempt ON voice_recordings(attempt_id)");
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_voice_session ON voice_recordings(session_id)");
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_voice_sentence ON voice_recordings(sentence_key)");
     }
 
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-        // 当前版本为 1。未来增加字段或表时在这里按版本执行 ALTER TABLE / CREATE TABLE。
-        // 不要 DROP TABLE，也不要清空用户的学习记录。
+        // 不要 DROP TABLE，也不要清空用户的学习记录。只增不删。
+        if (oldVersion < 2) {
+            // v2：卡片记录增加“是否点过提示”等字段，并新增录音表。
+            db.execSQL("ALTER TABLE study_attempts ADD COLUMN answer_revealed INTEGER NOT NULL DEFAULT 0");
+            db.execSQL("ALTER TABLE study_attempts ADD COLUMN memory_hint_revealed INTEGER NOT NULL DEFAULT 0");
+            db.execSQL("ALTER TABLE study_attempts ADD COLUMN pronunciation_guide_revealed INTEGER NOT NULL DEFAULT 0");
+            db.execSQL("ALTER TABLE study_attempts ADD COLUMN favorite_toggled INTEGER NOT NULL DEFAULT 0");
+            db.execSQL("ALTER TABLE study_attempts ADD COLUMN mastery_clicked INTEGER NOT NULL DEFAULT 0");
+            db.execSQL("ALTER TABLE study_attempts ADD COLUMN recording_count INTEGER NOT NULL DEFAULT 0");
+            createVoiceRecordingsTable(db);
+        }
     }
 
     // ---------------------------------------------------------------------
@@ -555,7 +619,132 @@ public class FlesDatabase extends SQLiteOpenHelper {
         v.put("event_type", eventType);
         v.put("occurred_at", occurredAt);
         if (elapsedMs != null && elapsedMs >= 0) v.put("elapsed_ms", elapsedMs);
-        getWritableDatabase().insert("study_events", null, v);
+        SQLiteDatabase db = getWritableDatabase();
+        db.insert("study_events", null, v);
+
+        // 同时把结果记到卡片记录自己的字段上，查询“这次有没有点提示”不必再扫事件表。
+        String flagColumn = flagColumnForEvent(eventType);
+        if (flagColumn != null && attemptId != null && attemptId >= 0) {
+            db.execSQL("UPDATE study_attempts SET " + flagColumn + " = 1 WHERE id = ?",
+                    new Object[]{attemptId});
+        }
+    }
+
+    /** 事件类型 -> 卡片记录上的标记列。列名只来自这里的固定白名单。 */
+    private static String flagColumnForEvent(String eventType) {
+        if ("ANSWER_REVEALED".equals(eventType)) return "answer_revealed";
+        if ("MEMORY_HINT_REVEALED".equals(eventType)) return "memory_hint_revealed";
+        if ("PRONUNCIATION_GUIDE_REVEALED".equals(eventType)) return "pronunciation_guide_revealed";
+        if ("FAVORITE_ADDED".equals(eventType) || "FAVORITE_REMOVED".equals(eventType)) return "favorite_toggled";
+        if ("MASTERY_CLICKED".equals(eventType)) return "mastery_clicked";
+        return null;
+    }
+
+    // ---------------------------------------------------------------------
+    // 卡片记录耗时：一张卡片可能跨多段前台时间（切到后台再回来），所以累加而不是覆盖
+    // ---------------------------------------------------------------------
+
+    /** 累加当前卡片的一段前台时长，不结束卡片记录。 */
+    public void addStudyAttemptDuration(long attemptId, long additionalDurationMs) {
+        if (additionalDurationMs <= 0L) return;
+        getWritableDatabase().execSQL(
+                "UPDATE study_attempts SET duration_ms = duration_ms + ? " +
+                        "WHERE id = ? AND ended_at IS NULL",
+                new Object[]{additionalDurationMs, attemptId});
+    }
+
+    /** 累加最后一段前台时长，并结束这条卡片记录。 */
+    public void finishStudyAttemptWithAdditionalDuration(
+            long attemptId, long endedAt, long additionalDurationMs, String reason) {
+        getWritableDatabase().execSQL(
+                "UPDATE study_attempts SET duration_ms = duration_ms + ?, " +
+                        "ended_at = ?, end_reason = ? WHERE id = ? AND ended_at IS NULL",
+                new Object[]{Math.max(0L, additionalDurationMs), endedAt, safe(reason), attemptId});
+    }
+
+    // ---------------------------------------------------------------------
+    // 录音
+    // ---------------------------------------------------------------------
+
+    /** 这张卡片记录下一段录音的序号（从 1 开始）。 */
+    public int nextVoiceSequence(long attemptId) {
+        Cursor c = getReadableDatabase().rawQuery(
+                "SELECT COALESCE(MAX(sequence_no), 0) + 1 FROM voice_recordings WHERE attempt_id = ?",
+                new String[]{String.valueOf(attemptId)});
+        try {
+            return c.moveToFirst() ? c.getInt(0) : 1;
+        } finally {
+            c.close();
+        }
+    }
+
+    /** 保存一段已成功写完的 WAV 的登记信息，并同步更新卡片记录上的 recording_count。 */
+    public long insertVoiceRecording(
+            long sessionId, long attemptId, int sequenceNo, String sentenceKey,
+            String fileName, String relativePath, long startedAt, long endedAt,
+            long durationMs, int sampleRate, int channels, int bitsPerSample,
+            long fileSizeBytes, String stopReason) {
+        ContentValues values = new ContentValues();
+        values.put("session_id", sessionId);
+        values.put("attempt_id", attemptId);
+        values.put("sequence_no", sequenceNo);
+        values.put("sentence_key", safe(sentenceKey));
+        values.put("file_name", safe(fileName));
+        values.put("relative_path", safe(relativePath));
+        values.put("started_at", startedAt);
+        values.put("ended_at", endedAt);
+        values.put("duration_ms", Math.max(0L, durationMs));
+        values.put("sample_rate", sampleRate);
+        values.put("channels", channels);
+        values.put("bits_per_sample", bitsPerSample);
+        values.put("file_size_bytes", Math.max(0L, fileSizeBytes));
+        values.put("stop_reason", safe(stopReason));
+
+        SQLiteDatabase db = getWritableDatabase();
+        db.beginTransaction();
+        try {
+            long id = db.insertOrThrow("voice_recordings", null, values);
+            db.execSQL("UPDATE study_attempts SET recording_count = recording_count + 1 WHERE id = ?",
+                    new Object[]{attemptId});
+            db.setTransactionSuccessful();
+            return id;
+        } finally {
+            db.endTransaction();
+        }
+    }
+
+    public List<VoiceRecording> getVoiceRecordingsForAttempt(long attemptId) {
+        List<VoiceRecording> result = new ArrayList<VoiceRecording>();
+        Cursor c = getReadableDatabase().rawQuery(
+                "SELECT id, session_id, attempt_id, sequence_no, sentence_key, file_name, " +
+                        "relative_path, started_at, ended_at, duration_ms, sample_rate, channels, " +
+                        "bits_per_sample, file_size_bytes, stop_reason " +
+                        "FROM voice_recordings WHERE attempt_id = ? ORDER BY sequence_no ASC",
+                new String[]{String.valueOf(attemptId)});
+        try {
+            while (c.moveToNext()) {
+                VoiceRecording r = new VoiceRecording();
+                r.id = c.getLong(0);
+                r.sessionId = c.getLong(1);
+                r.attemptId = c.getLong(2);
+                r.sequenceNo = c.getInt(3);
+                r.sentenceKey = c.getString(4);
+                r.fileName = c.getString(5);
+                r.relativePath = c.getString(6);
+                r.startedAt = c.getLong(7);
+                r.endedAt = c.getLong(8);
+                r.durationMs = c.getLong(9);
+                r.sampleRate = c.getInt(10);
+                r.channels = c.getInt(11);
+                r.bitsPerSample = c.getInt(12);
+                r.fileSizeBytes = c.getLong(13);
+                r.stopReason = c.getString(14);
+                result.add(r);
+            }
+        } finally {
+            c.close();
+        }
+        return result;
     }
 
     /** 关闭 APP/异常退出后，可将未结束的记录标记为 interrupted。 */
